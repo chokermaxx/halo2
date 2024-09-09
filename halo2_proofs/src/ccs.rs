@@ -15,6 +15,8 @@ pub struct CellDumper<F: Field> {
     pub fixed: Vec<Vec<Option<F>>>,
     // selectors[column_index][row_index] == cell_value
     pub selectors: Vec<Vec<bool>>,
+    // advice[column_index][row_index] == cell_value
+    pub advice: Vec<Vec<Option<F>>>,
     // A range of available rows for assignment and copies.
     pub usable_rows: Range<usize>,
     _marker: std::marker::PhantomData<F>,
@@ -60,9 +62,9 @@ impl<F: Field> Assignment<F> for CellDumper<F> {
     fn assign_advice<V, VR, A, AR>(
         &mut self,
         _: A,
-        _: Column<Advice>,
-        _: usize,
-        _: V,
+        column: Column<Advice>,
+        row_index: usize,
+        to: V,
     ) -> Result<(), Error>
     where
         V: FnOnce() -> Value<VR>,
@@ -70,7 +72,16 @@ impl<F: Field> Assignment<F> for CellDumper<F> {
         A: FnOnce() -> AR,
         AR: Into<String>,
     {
-        // TODO
+        if !self.usable_rows.contains(&row_index) {
+            return Err(Error::not_enough_rows_available(self.k));
+        }
+
+        *self
+            .advice
+            .get_mut(column.index())
+            .and_then(|row| row.get_mut(row_index))
+            .ok_or(Error::BoundsFailure)? = to().into_field().into_option().map(|x| x.evaluate());
+
         Ok(())
     }
 
@@ -158,12 +169,15 @@ impl<F: Field> Assignment<F> for CellDumper<F> {
 mod tests {
     use super::CellDumper;
     use crate::circuit::{Layouter, SimpleFloorPlanner, Value};
-    use crate::plonk::{Circuit, Column, ConstraintSystem, Error, Fixed, FloorPlanner, Selector};
+    use crate::plonk::{
+        Advice, Circuit, Column, ConstraintSystem, Error, Fixed, FloorPlanner, Selector,
+    };
     use pasta_curves::Fp;
 
     #[derive(Copy, Clone)]
     struct TestConfig {
         a: Column<Fixed>,
+        b: Column<Advice>,
         s: Selector,
     }
 
@@ -175,9 +189,10 @@ mod tests {
 
         fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
             let a = meta.fixed_column();
+            let b = meta.advice_column();
             let s = meta.selector();
 
-            Self::Config { a, s }
+            Self::Config { a, b, s }
         }
 
         fn without_witnesses(&self) -> Self {
@@ -194,11 +209,14 @@ mod tests {
                 |mut region| {
                     config.s.enable(&mut region, 0)?;
                     region.assign_fixed(|| "", config.a, 0, || Value::known(Fp::from(123)))?;
+                    region.assign_advice(|| "", config.b, 0, || Value::known(Fp::from(321)))?;
 
                     region.assign_fixed(|| "", config.a, 1, || Value::known(Fp::from(456)))?;
+                    region.assign_advice(|| "", config.b, 1, || Value::known(Fp::from(654)))?;
 
                     config.s.enable(&mut region, 2)?;
                     region.assign_fixed(|| "", config.a, 2, || Value::known(Fp::from(789)))?;
+                    region.assign_advice(|| "", config.b, 2, || Value::known(Fp::from(987)))?;
 
                     Ok(())
                 },
@@ -209,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn dump_fixed_cells() -> Result<(), Error> {
+    fn dump_cells() -> Result<(), Error> {
         let k = 5;
         let n = 1usize << k;
         let mut meta = ConstraintSystem::default();
@@ -218,6 +236,7 @@ mod tests {
         let mut cell_dumper: CellDumper<Fp> = CellDumper {
             k,
             fixed: vec![vec![None; n]; meta.num_fixed_columns],
+            advice: vec![vec![None; n]; meta.num_advice_columns],
             selectors: vec![vec![false; n]; meta.num_selectors],
             usable_rows: 0..(n - meta.blinding_factors() - 1), // Why -1?
             _marker: std::marker::PhantomData,
@@ -233,12 +252,15 @@ mod tests {
 
         assert!(cell_dumper.selectors[0][0]);
         assert_eq!(cell_dumper.fixed[0][0], Some(Fp::from(123)));
+        assert_eq!(cell_dumper.advice[0][0], Some(Fp::from(321)));
 
         assert!(!cell_dumper.selectors[0][1]);
         assert_eq!(cell_dumper.fixed[0][1], Some(Fp::from(456)));
+        assert_eq!(cell_dumper.advice[0][1], Some(Fp::from(654)));
 
         assert!(cell_dumper.selectors[0][2]);
         assert_eq!(cell_dumper.fixed[0][2], Some(Fp::from(789)));
+        assert_eq!(cell_dumper.advice[0][2], Some(Fp::from(987)));
 
         Ok(())
     }
