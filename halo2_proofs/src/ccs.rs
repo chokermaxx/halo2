@@ -19,7 +19,6 @@ pub struct CellDumper<F: Field> {
     pub advice: Vec<Vec<Option<F>>>,
     // A range of available rows for assignment and copies.
     pub usable_rows: Range<usize>,
-    _marker: std::marker::PhantomData<F>,
 }
 
 // Based on keygen.rs.
@@ -239,7 +238,6 @@ mod tests {
             advice: vec![vec![None; n]; meta.num_advice_columns],
             selectors: vec![vec![false; n]; meta.num_selectors],
             usable_rows: 0..(n - meta.blinding_factors() - 1), // Why -1?
-            _marker: std::marker::PhantomData,
         };
 
         let circuit = TestCircuit();
