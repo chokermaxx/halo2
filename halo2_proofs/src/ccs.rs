@@ -11,6 +11,9 @@ use crate::plonk::{Advice, Any, Assigned, Assignment, Column, Error, Fixed, Inst
 #[derive(Debug)]
 pub struct CellDumper<F: Field> {
     pub k: u32,
+
+    // instance[column_index][row_index] == cell_value
+    pub instance: Vec<Vec<Value<F>>>,
     // fixed[column_index][row_index] == cell_value
     pub fixed: Vec<Vec<Option<F>>>,
     // selectors[column_index][row_index] == cell_value
@@ -49,13 +52,20 @@ impl<F: Field> Assignment<F> for CellDumper<F> {
         Ok(())
     }
 
-    fn query_instance(&self, _: Column<Instance>, row: usize) -> Result<Value<F>, Error> {
-        if !self.usable_rows.contains(&row) {
+    fn query_instance(
+        &self,
+        column: Column<Instance>,
+        row_index: usize,
+    ) -> Result<Value<F>, Error> {
+        if !self.usable_rows.contains(&row_index) {
             return Err(Error::not_enough_rows_available(self.k));
         }
 
-        // TODO
-        Ok(Value::unknown())
+        self.instance
+            .get(column.index())
+            .and_then(|column| column.get(row_index))
+            .copied()
+            .ok_or(Error::BoundsFailure)
     }
 
     fn assign_advice<V, VR, A, AR>(
@@ -234,6 +244,7 @@ mod tests {
 
         let mut cell_dumper: CellDumper<Fp> = CellDumper {
             k,
+            instance: vec![vec![Value::unknown(); n]; meta.num_instance_columns],
             fixed: vec![vec![None; n]; meta.num_fixed_columns],
             advice: vec![vec![None; n]; meta.num_advice_columns],
             selectors: vec![vec![false; n]; meta.num_selectors],
