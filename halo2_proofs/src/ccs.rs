@@ -192,7 +192,8 @@ mod tests {
     use super::CellDumper;
     use crate::circuit::{Layouter, SimpleFloorPlanner, Value};
     use crate::plonk::{
-        Advice, Any, Circuit, Column, ConstraintSystem, Error, Fixed, FloorPlanner, Selector,
+        Advice, Any, Circuit, Column, ConstraintSystem, Error, Fixed, FloorPlanner, Instance,
+        Selector,
     };
     use pasta_curves::Fp;
 
@@ -200,6 +201,7 @@ mod tests {
     struct TestConfig {
         a: Column<Fixed>,
         b: Column<Advice>,
+        c: Column<Instance>,
         s: Selector,
     }
 
@@ -212,9 +214,10 @@ mod tests {
         fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
             let a = meta.fixed_column();
             let b = meta.advice_column();
+            let c = meta.instance_column();
             let s = meta.selector();
 
-            Self::Config { a, b, s }
+            Self::Config { a, b, c, s }
         }
 
         fn without_witnesses(&self) -> Self {
@@ -254,6 +257,9 @@ mod tests {
                         region.assign_fixed(|| "", config.a, 3, || Value::known(Fp::from(111)))?;
                     region.constrain_equal(left.cell(), above.cell())?;
 
+                    // to test query_instance
+                    region.assign_advice_from_instance(|| "", config.c, 0, config.b, 5)?;
+
                     Ok(())
                 },
             )?;
@@ -269,9 +275,12 @@ mod tests {
         let mut meta = ConstraintSystem::default();
         let config = TestCircuit::configure(&mut meta);
 
+        let mut instance = vec![vec![Value::unknown(); n]; meta.num_instance_columns];
+        instance[0][0] = Value::known(Fp::from(777));
+
         let mut cell_dumper: CellDumper<Fp> = CellDumper {
             k,
-            instance: vec![vec![Value::unknown(); n]; meta.num_instance_columns],
+            instance,
             fixed: vec![vec![None; n]; meta.num_fixed_columns],
             advice: vec![vec![None; n]; meta.num_advice_columns],
             selectors: vec![vec![false; n]; meta.num_selectors],
@@ -307,6 +316,8 @@ mod tests {
             cell_dumper.copy_constraints[1],
             (Any::Fixed, 0, 3, Any::Advice, 0, 3)
         );
+
+        assert_eq!(cell_dumper.advice[0][5], Some(Fp::from(777)));
 
         Ok(())
     }
