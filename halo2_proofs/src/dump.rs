@@ -9,7 +9,7 @@ use crate::plonk::{Advice, Any, Assigned, Assignment, Column, Error, Fixed, Inst
 
 /// Visit a circuit and keep track of cell assignment.
 #[derive(Debug)]
-pub struct CellDumper<F: Field> {
+pub struct AssignmentDumper<F: Field> {
     pub k: u32,
 
     pub copy_constraints: Vec<(
@@ -33,7 +33,7 @@ pub struct CellDumper<F: Field> {
 }
 
 // Based on keygen.rs.
-impl<F: Field> Assignment<F> for CellDumper<F> {
+impl<F: Field> Assignment<F> for AssignmentDumper<F> {
     fn enter_region<NR, N>(&mut self, _: N)
     where
         NR: Into<String>,
@@ -189,7 +189,7 @@ impl<F: Field> Assignment<F> for CellDumper<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::CellDumper;
+    use super::AssignmentDumper;
     use crate::circuit::{Layouter, SimpleFloorPlanner, Value};
     use crate::plonk::{
         Advice, Any, Circuit, Column, ConstraintSystem, Error, Fixed, FloorPlanner, Instance,
@@ -278,7 +278,7 @@ mod tests {
         let mut instance = vec![vec![Value::unknown(); n]; meta.num_instance_columns];
         instance[0][0] = Value::known(Fp::from(777));
 
-        let mut cell_dumper: CellDumper<Fp> = CellDumper {
+        let mut cell_dumper: AssignmentDumper<Fp> = AssignmentDumper {
             k,
             instance,
             fixed: vec![vec![None; n]; meta.num_fixed_columns],
