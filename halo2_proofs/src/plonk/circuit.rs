@@ -253,7 +253,7 @@ impl TryFrom<Column<Any>> for Column<Instance> {
 /// }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Selector(pub(crate) usize, bool);
+pub struct Selector(pub usize, bool);
 
 impl Selector {
     /// Enable this selector at the given offset within the given region.
@@ -269,36 +269,36 @@ impl Selector {
 }
 
 /// Query of fixed column at a certain relative location
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct FixedQuery {
     /// Query index
-    pub(crate) index: usize,
+    pub index: usize,
     /// Column index
-    pub(crate) column_index: usize,
+    pub column_index: usize,
     /// Rotation of this query
-    pub(crate) rotation: Rotation,
+    pub rotation: Rotation,
 }
 
 /// Query of advice column at a certain relative location
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct AdviceQuery {
     /// Query index
-    pub(crate) index: usize,
+    pub index: usize,
     /// Column index
-    pub(crate) column_index: usize,
+    pub column_index: usize,
     /// Rotation of this query
-    pub(crate) rotation: Rotation,
+    pub rotation: Rotation,
 }
 
 /// Query of instance column at a certain relative location
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct InstanceQuery {
     /// Query index
-    pub(crate) index: usize,
+    pub index: usize,
     /// Column index
-    pub(crate) column_index: usize,
+    pub column_index: usize,
     /// Rotation of this query
-    pub(crate) rotation: Rotation,
+    pub rotation: Rotation,
 }
 
 /// A fixed column of a lookup table.
@@ -485,7 +485,7 @@ pub trait Circuit<F: Field> {
 }
 
 /// Low-degree expression representing an identity that must hold over the committed columns.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Expression<F> {
     /// This is a constant polynomial
     Constant(F),

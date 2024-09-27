@@ -5,7 +5,7 @@ use std::ops::Range;
 use ff::Field;
 
 use crate::circuit::Value;
-use crate::plonk::{lookup, Expression};
+use crate::plonk::Expression;
 use crate::plonk::{
     Advice, Any, Assigned, Assignment, Circuit, Column, ConstraintSystem, Error, Fixed,
     FloorPlanner, Instance, Selector,
@@ -193,39 +193,18 @@ impl<F: Field> Assignment<F> for AssignmentDumper<F> {
 
 // TODO: dump custom gates too
 pub fn dump_constraints<F: Field, C: Circuit<F>>(
-    k: u32,
-    circuit: C,
-    instance: Vec<Vec<Value<F>>>,
 ) -> Result<Vec<(Expression<F>, Expression<F>)>, Error> {
-    let n = 1usize << k;
     let mut meta = ConstraintSystem::default();
-    let config = C::configure(&mut meta);
-
-    let mut assignment_dumper: AssignmentDumper<F> = AssignmentDumper {
-        k,
-        instance,
-        fixed: vec![vec![None; n]; meta.num_fixed_columns],
-        advice: vec![vec![None; n]; meta.num_advice_columns],
-        selectors: vec![vec![false; n]; meta.num_selectors],
-        copy_constraints: Vec::new(),
-        usable_rows: 0..(n - meta.blinding_factors() - 1), // Why -1?
-    };
-
-    <<C as Circuit<F>>::FloorPlanner as FloorPlanner>::synthesize(
-        &mut assignment_dumper,
-        &circuit,
-        config,
-        meta.constants.clone(),
-    )?;
+    C::configure(&mut meta);
 
     let input_expressions = meta
         .lookups
         .iter()
-        .flat_map(|argument| argument.input_expressions);
+        .flat_map(|argument| argument.input_expressions.iter().cloned());
     let table_expressions = meta
         .lookups
         .iter()
-        .flat_map(|argument| argument.table_expressions);
+        .flat_map(|argument| argument.table_expressions.iter().cloned());
     let lookup_constraints = input_expressions.zip(table_expressions).collect();
 
     Ok(lookup_constraints)
@@ -234,7 +213,14 @@ pub fn dump_constraints<F: Field, C: Circuit<F>>(
 #[cfg(test)]
 mod tests {
     use super::AssignmentDumper;
+    use crate::plonk::Expression;
+    use crate::plonk::FixedQuery;
+    use crate::plonk::InstanceQuery;
+    use crate::poly::Rotation;
+
     use crate::circuit::{Layouter, SimpleFloorPlanner, Value};
+    use crate::dump::dump_constraints;
+    use crate::plonk::TableColumn;
     use crate::plonk::{
         Advice, Any, Circuit, Column, ConstraintSystem, Error, Fixed, FloorPlanner, Instance,
         Selector,
@@ -362,6 +348,80 @@ mod tests {
         );
 
         assert_eq!(cell_dumper.advice[0][5], Some(Fp::from(777)));
+
+        Ok(())
+    }
+
+    #[derive(Copy, Clone)]
+    struct LookupTestConfig {
+        lookup_table: TableColumn,
+        instance: Column<Instance>,
+    }
+
+    struct LookupTestCircuit();
+
+    impl Circuit<Fp> for LookupTestCircuit {
+        type Config = LookupTestConfig;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
+            let lookup_table = meta.lookup_table_column();
+            let instance = meta.instance_column();
+
+            meta.lookup(|query| {
+                let every_instance_cell = query.query_instance(instance, Rotation::cur());
+                vec![(every_instance_cell, lookup_table)]
+            });
+
+            Self::Config {
+                lookup_table,
+                instance,
+            }
+        }
+
+        fn without_witnesses(&self) -> Self {
+            Self()
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<Fp>,
+        ) -> Result<(), Error> {
+            layouter.assign_table(
+                || "",
+                |mut region| {
+                    region.assign_cell(
+                        || "",
+                        config.lookup_table,
+                        0,
+                        || Value::known(Fp::from(111)),
+                    )
+                },
+            )?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_dump_constraints() -> Result<(), Error> {
+        let lookup_constraints = dump_constraints::<Fp, LookupTestCircuit>()?;
+        assert_eq!(
+            lookup_constraints,
+            [(
+                Expression::Instance(InstanceQuery {
+                    index: 0,
+                    column_index: 0,
+                    rotation: Rotation(0),
+                }),
+                Expression::Fixed(FixedQuery {
+                    index: 0,
+                    column_index: 0,
+                    rotation: Rotation(0),
+                }),
+            )]
+        );
 
         Ok(())
     }
