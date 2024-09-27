@@ -5,7 +5,11 @@ use std::ops::Range;
 use ff::Field;
 
 use crate::circuit::Value;
-use crate::plonk::{Advice, Any, Assigned, Assignment, Column, Error, Fixed, Instance, Selector};
+use crate::plonk::{lookup, Expression};
+use crate::plonk::{
+    Advice, Any, Assigned, Assignment, Circuit, Column, ConstraintSystem, Error, Fixed,
+    FloorPlanner, Instance, Selector,
+};
 
 /// Visit a circuit and keep track of cell assignment.
 #[derive(Debug)]
@@ -185,6 +189,46 @@ impl<F: Field> Assignment<F> for AssignmentDumper<F> {
     fn pop_namespace(&mut self, _: Option<String>) {
         // Do nothing; we don't care about namespaces in this context.
     }
+}
+
+// TODO: dump custom gates too
+pub fn dump_constraints<F: Field, C: Circuit<F>>(
+    k: u32,
+    circuit: C,
+    instance: Vec<Vec<Value<F>>>,
+) -> Result<Vec<(Expression<F>, Expression<F>)>, Error> {
+    let n = 1usize << k;
+    let mut meta = ConstraintSystem::default();
+    let config = C::configure(&mut meta);
+
+    let mut assignment_dumper: AssignmentDumper<F> = AssignmentDumper {
+        k,
+        instance,
+        fixed: vec![vec![None; n]; meta.num_fixed_columns],
+        advice: vec![vec![None; n]; meta.num_advice_columns],
+        selectors: vec![vec![false; n]; meta.num_selectors],
+        copy_constraints: Vec::new(),
+        usable_rows: 0..(n - meta.blinding_factors() - 1), // Why -1?
+    };
+
+    <<C as Circuit<F>>::FloorPlanner as FloorPlanner>::synthesize(
+        &mut assignment_dumper,
+        &circuit,
+        config,
+        meta.constants.clone(),
+    )?;
+
+    let input_expressions = meta
+        .lookups
+        .iter()
+        .flat_map(|argument| argument.input_expressions);
+    let table_expressions = meta
+        .lookups
+        .iter()
+        .flat_map(|argument| argument.table_expressions);
+    let lookup_constraints = input_expressions.zip(table_expressions).collect();
+
+    Ok(lookup_constraints)
 }
 
 #[cfg(test)]
