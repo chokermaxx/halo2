@@ -191,7 +191,20 @@ impl<F: Field> Assignment<F> for AssignmentDumper<F> {
     }
 }
 
-// TODO: dump custom gates too
+pub fn dump_gates<F: Field, C: Circuit<F>>() -> Result<Vec<Expression<F>>, Error> {
+    let mut meta = ConstraintSystem::default();
+    C::configure(&mut meta);
+
+    let gates = meta
+        .gates
+        .iter()
+        .flat_map(|gate| gate.polynomials())
+        .cloned()
+        .collect();
+
+    Ok(gates)
+}
+
 pub fn dump_constraints<F: Field, C: Circuit<F>>(
 ) -> Result<Vec<(Expression<F>, Expression<F>)>, Error> {
     let mut meta = ConstraintSystem::default();
