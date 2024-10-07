@@ -226,6 +226,8 @@ pub fn dump_lookups<F: Field, C: Circuit<F>>() -> Result<Vec<(Expression<F>, Exp
 #[cfg(test)]
 mod tests {
     use super::AssignmentDumper;
+    use crate::dump::dump_gates;
+    use crate::plonk::AdviceQuery;
     use crate::plonk::Expression;
     use crate::plonk::FixedQuery;
     use crate::plonk::InstanceQuery;
@@ -434,6 +436,67 @@ mod tests {
                     rotation: Rotation(0),
                 }),
             )]
+        );
+
+        Ok(())
+    }
+
+    #[derive(Copy, Clone)]
+    struct GateTestConfig {
+        a: Column<Advice>,
+        b: Column<Advice>,
+    }
+
+    struct GateTestCircuit();
+
+    impl Circuit<Fp> for GateTestCircuit {
+        type Config = GateTestConfig;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
+            let a = meta.advice_column();
+            let b = meta.advice_column();
+
+            meta.create_gate("", |gate| {
+                let a_cur = gate.query_advice(a, Rotation::cur());
+                let b_cur = gate.query_advice(b, Rotation::cur());
+                vec![a_cur * b_cur]
+                // One of them has to be 0
+            });
+
+            Self::Config { a, b }
+        }
+
+        fn without_witnesses(&self) -> Self {
+            Self()
+        }
+
+        fn synthesize(
+            &self,
+            _config: Self::Config,
+            _layouter: impl Layouter<Fp>,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_dump_gates() -> Result<(), Error> {
+        let custom_gates = dump_gates::<Fp, GateTestCircuit>()?;
+        assert_eq!(
+            custom_gates,
+            vec![Expression::Product(
+                Box::new(Expression::Advice(AdviceQuery {
+                    index: 0,
+                    column_index: 0,
+                    rotation: Rotation(0)
+                })),
+                Box::new(Expression::Advice(AdviceQuery {
+                    index: 1,
+                    column_index: 1,
+                    rotation: Rotation(0)
+                })),
+            ),]
         );
 
         Ok(())
