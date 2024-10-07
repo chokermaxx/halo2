@@ -205,8 +205,8 @@ pub fn dump_gates<F: Field, C: Circuit<F>>() -> Result<Vec<Expression<F>>, Error
     Ok(gates)
 }
 
-pub fn dump_constraints<F: Field, C: Circuit<F>>(
-) -> Result<Vec<(Expression<F>, Expression<F>)>, Error> {
+pub fn dump_lookups<F: Field, C: Circuit<F>>() -> Result<Vec<(Expression<F>, Expression<F>)>, Error>
+{
     let mut meta = ConstraintSystem::default();
     C::configure(&mut meta);
 
@@ -232,7 +232,7 @@ mod tests {
     use crate::poly::Rotation;
 
     use crate::circuit::{Layouter, SimpleFloorPlanner, Value};
-    use crate::dump::dump_constraints;
+    use crate::dump::dump_lookups;
     use crate::plonk::TableColumn;
     use crate::plonk::{
         Advice, Any, Circuit, Column, ConstraintSystem, Error, Fixed, FloorPlanner, Instance,
@@ -418,8 +418,8 @@ mod tests {
     }
 
     #[test]
-    fn test_dump_constraints() -> Result<(), Error> {
-        let lookup_constraints = dump_constraints::<Fp, LookupTestCircuit>()?;
+    fn test_dump_lookups() -> Result<(), Error> {
+        let lookup_constraints = dump_lookups::<Fp, LookupTestCircuit>()?;
         assert_eq!(
             lookup_constraints,
             [(
