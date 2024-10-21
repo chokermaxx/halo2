@@ -148,6 +148,12 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
 #[cfg(test)]
 mod tests {
     use super::MyCircuit;
+    use halo2_proofs::circuit::Value;
+    use halo2_proofs::dump::AssignmentDumper;
+    use halo2_proofs::plonk::Circuit;
+    use halo2_proofs::plonk::ConstraintSystem;
+    use halo2_proofs::plonk::Error;
+    use halo2_proofs::plonk::FloorPlanner;
     use halo2_proofs::{dev::MockProver, pasta::Fp};
     use std::marker::PhantomData;
 
@@ -184,5 +190,40 @@ mod tests {
         halo2_proofs::dev::CircuitLayout::default()
             .render(4, &circuit, &root)
             .unwrap();
+    }
+
+    #[test]
+    fn test_dump() -> Result<(), Error> {
+        let k = 4;
+        let n = 1usize << k;
+        let mut meta = ConstraintSystem::default();
+        let config = MyCircuit::configure(&mut meta);
+
+        let mut instance = vec![vec![Value::unknown(); n]; meta.num_instance_columns];
+        instance[0][0] = Value::known(1.into());
+        instance[0][1] = Value::known(1.into());
+        instance[0][2] = Value::known(55.into());
+
+        let mut cell_dumper: AssignmentDumper<Fp> = AssignmentDumper {
+            k,
+            instance,
+            fixed: vec![vec![None; n]; meta.num_fixed_columns],
+            advice: vec![vec![None; n]; meta.num_advice_columns],
+            selectors: vec![vec![false; n]; meta.num_selectors],
+            copy_constraints: Vec::new(),
+            usable_rows: 0..(n - meta.blinding_factors() - 1), // Why -1?
+        };
+
+        let circuit = MyCircuit(PhantomData);
+        <<MyCircuit<Fp> as Circuit<Fp>>::FloorPlanner as FloorPlanner>::synthesize(
+            &mut cell_dumper,
+            &circuit,
+            config,
+            meta.constants.clone(),
+        )?;
+
+        dbg!(cell_dumper);
+
+        Ok(())
     }
 }

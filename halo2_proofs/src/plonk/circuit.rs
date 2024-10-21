@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 use core::cmp::max;
 use core::ops::{Add, Mul};
 use ff::Field;
@@ -932,10 +933,10 @@ impl<F: Field> Gate<F> {
 /// permutation arrangements.
 #[derive(Debug, Clone)]
 pub struct ConstraintSystem<F: Field> {
-    pub(crate) num_fixed_columns: usize,
-    pub(crate) num_advice_columns: usize,
-    pub(crate) num_instance_columns: usize,
-    pub(crate) num_selectors: usize,
+    pub num_fixed_columns: usize,
+    pub num_advice_columns: usize,
+    pub num_instance_columns: usize,
+    pub num_selectors: usize,
 
     /// This is a cached vector that maps virtual selectors to the concrete
     /// fixed column that they were compressed into. This is just used by dev
@@ -960,7 +961,7 @@ pub struct ConstraintSystem<F: Field> {
 
     // Vector of fixed columns, which can be used to store constant values
     // that are copied into advice columns.
-    pub(crate) constants: Vec<Column<Fixed>>,
+    pub constants: Vec<Column<Fixed>>,
 
     pub(crate) minimum_degree: Option<usize>,
 }
