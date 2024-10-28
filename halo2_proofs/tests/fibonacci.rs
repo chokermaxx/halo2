@@ -9,6 +9,7 @@ struct FibonacciConfig {
     advice: Column<Advice>,
     selector: Selector,
     instance: Column<Instance>,
+    lookup_table: TableColumn,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +32,7 @@ impl<F: Field> FibonacciChip<F> {
         instance: Column<Instance>,
     ) -> FibonacciConfig {
         let selector = meta.selector();
+        let lookup_table = meta.lookup_table_column();
 
         meta.enable_equality(advice);
         meta.enable_equality(instance);
@@ -46,13 +48,20 @@ impl<F: Field> FibonacciChip<F> {
             let a = meta.query_advice(advice, Rotation::cur());
             let b = meta.query_advice(advice, Rotation::next());
             let c = meta.query_advice(advice, Rotation(2));
+
             vec![s * (a + b - c)]
+        });
+
+        meta.lookup(|query| {
+            let every_advice_cell = query.query_advice(advice, Rotation::cur());
+            vec![(every_advice_cell, lookup_table)]
         });
 
         FibonacciConfig {
             advice,
             selector,
             instance,
+            lookup_table,
         }
     }
 
@@ -149,6 +158,8 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
 mod tests {
     use super::MyCircuit;
     use halo2_proofs::circuit::Value;
+    use halo2_proofs::dump::dump_gates;
+    use halo2_proofs::dump::dump_lookups;
     use halo2_proofs::dump::AssignmentDumper;
     use halo2_proofs::plonk::Circuit;
     use halo2_proofs::plonk::ConstraintSystem;
@@ -193,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dump() -> Result<(), Error> {
+    fn test_dump_fibonacci() -> Result<(), Error> {
         let k = 4;
         let mut meta = ConstraintSystem::<Fp>::default();
         let config = MyCircuit::configure(&mut meta);
@@ -212,6 +223,8 @@ mod tests {
         )?;
 
         dbg!(cell_dumper);
+        dbg!(dump_gates::<Fp, MyCircuit<Fp>>());
+        dbg!(dump_lookups::<Fp, MyCircuit<Fp>>());
 
         Ok(())
     }
