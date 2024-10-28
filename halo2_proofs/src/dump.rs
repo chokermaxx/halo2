@@ -39,6 +39,21 @@ pub struct AssignmentDumper<F: Field> {
     pub usable_rows: Range<usize>,
 }
 
+impl<F: Field> AssignmentDumper<F> {
+    pub fn new(k: u32, meta: &ConstraintSystem<F>) -> Self {
+        let n = 1 << k;
+        AssignmentDumper {
+            k,
+            instance: vec![vec![Value::unknown(); n]; meta.num_instance_columns],
+            fixed: vec![vec![None; n]; meta.num_fixed_columns],
+            advice: vec![vec![None; n]; meta.num_advice_columns],
+            selectors: vec![vec![false; n]; meta.num_selectors],
+            copy_constraints: Vec::new(),
+            usable_rows: 0..(n - meta.blinding_factors() - 1), // Why -1?
+        }
+    }
+}
+
 // Based on keygen.rs.
 impl<F: Field> Assignment<F> for AssignmentDumper<F> {
     fn enter_region<NR, N>(&mut self, _: N)
@@ -321,22 +336,11 @@ mod tests {
     #[test]
     fn dump_cells() -> Result<(), Error> {
         let k = 5;
-        let n = 1usize << k;
         let mut meta = ConstraintSystem::default();
         let config = TestCircuit::configure(&mut meta);
 
-        let mut instance = vec![vec![Value::unknown(); n]; meta.num_instance_columns];
-        instance[0][0] = Value::known(Fp::from(777));
-
-        let mut cell_dumper: AssignmentDumper<Fp> = AssignmentDumper {
-            k,
-            instance,
-            fixed: vec![vec![None; n]; meta.num_fixed_columns],
-            advice: vec![vec![None; n]; meta.num_advice_columns],
-            selectors: vec![vec![false; n]; meta.num_selectors],
-            copy_constraints: Vec::new(),
-            usable_rows: 0..(n - meta.blinding_factors() - 1), // Why -1?
-        };
+        let mut cell_dumper: AssignmentDumper<Fp> = AssignmentDumper::new(k, &meta);
+        cell_dumper.instance[0][0] = Value::known(Fp::from(777));
 
         let circuit = TestCircuit();
         <<TestCircuit as Circuit<Fp>>::FloorPlanner as FloorPlanner>::synthesize(
