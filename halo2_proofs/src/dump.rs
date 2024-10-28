@@ -11,19 +11,22 @@ use crate::plonk::{
     FloorPlanner, Instance, Selector,
 };
 
+#[derive(Debug, PartialEq)]
+pub struct CopyConstraint {
+    pub from_column_type: Any,
+    pub from_column_index: usize,
+    pub from_row_index: usize,
+    pub to_column_type: Any,
+    pub to_column_index: usize,
+    pub to_row_index: usize,
+}
+
 /// Visit a circuit and keep track of cell assignment.
 #[derive(Debug)]
 pub struct AssignmentDumper<F: Field> {
     pub k: u32,
 
-    pub copy_constraints: Vec<(
-        Any,   // column_type
-        usize, // column_index
-        usize, // row_index
-        Any,   // column_type
-        usize, // column_index
-        usize, // row_index
-    )>,
+    pub copy_constraints: Vec<CopyConstraint>,
     // instance[column_index][row_index] == cell_value
     pub instance: Vec<Vec<Value<F>>>,
     // fixed[column_index][row_index] == cell_value
@@ -143,14 +146,15 @@ impl<F: Field> Assignment<F> for AssignmentDumper<F> {
             return Err(Error::not_enough_rows_available(self.k));
         }
 
-        self.copy_constraints.push((
-            *left_column.column_type(),
-            left_column.index(),
-            left_row,
-            *right_column.column_type(),
-            right_column.index(),
-            right_row,
-        ));
+        let copy_constraint = CopyConstraint {
+            from_column_type: *left_column.column_type(),
+            from_column_index: left_column.index(),
+            from_row_index: left_row,
+            to_column_type: *right_column.column_type(),
+            to_column_index: right_column.index(),
+            to_row_index: right_row,
+        };
+        self.copy_constraints.push(copy_constraint);
 
         Ok(())
     }
@@ -227,6 +231,7 @@ pub fn dump_lookups<F: Field, C: Circuit<F>>() -> Result<Vec<(Expression<F>, Exp
 mod tests {
     use super::AssignmentDumper;
     use crate::dump::dump_gates;
+    use crate::dump::CopyConstraint;
     use crate::plonk::AdviceQuery;
     use crate::plonk::Expression;
     use crate::plonk::FixedQuery;
@@ -355,11 +360,26 @@ mod tests {
 
         assert_eq!(
             cell_dumper.copy_constraints[0],
-            (Any::Advice, 0, 3, Any::Advice, 0, 4)
+            CopyConstraint {
+                from_column_type: Any::Advice,
+                from_column_index: 0,
+                from_row_index: 3,
+                to_column_type: Any::Advice,
+                to_column_index: 0,
+                to_row_index: 4
+            }
         );
+
         assert_eq!(
             cell_dumper.copy_constraints[1],
-            (Any::Fixed, 0, 3, Any::Advice, 0, 3)
+            CopyConstraint {
+                from_column_type: Any::Fixed,
+                from_column_index: 0,
+                from_row_index: 3,
+                to_column_type: Any::Advice,
+                to_column_index: 0,
+                to_row_index: 3
+            }
         );
 
         assert_eq!(cell_dumper.advice[0][5], Some(Fp::from(777)));
