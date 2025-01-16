@@ -7,8 +7,8 @@ use ff::Field;
 use crate::circuit::Value;
 use crate::plonk::Expression;
 use crate::plonk::{
-    Advice, Any, Assigned, Assignment, Circuit, Column, ConstraintSystem, Error, Fixed,
-    FloorPlanner, Instance, Selector,
+    Advice, Any, Assigned, Assignment, Circuit, Column, ConstraintSystem, Error, Fixed, Instance,
+    Selector,
 };
 
 #[derive(Debug, PartialEq)]
